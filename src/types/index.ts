@@ -29,6 +29,9 @@ export interface ProductDTO {
   storeQty: number;
   salesType: SalesType | string;
   status: ProductStatus;
+  // ── Package Fields ──
+  isPackage?: boolean;
+  packageItems?: any;
   createdAt?: string;
   updatedAt?: string;
 }

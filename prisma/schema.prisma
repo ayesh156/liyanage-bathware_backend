@@ -124,6 +124,11 @@ model Product {
   salesType       String        @default("Piece")
   status          ProductStatus @default(Available)
   isDeleted       Boolean       @default(false)
+
+  // ── Package Feature ──
+  isPackage       Boolean       @default(false)
+  packageItems    Json?         // Default null. මෙහි අන්තර්ගත වන්නේ පැකේජ් එකේ ඇති බඩු ලැයිස්තුවයි: [{ productId, name, qty }]
+
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -253,8 +258,8 @@ model InvoiceItem {
   invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   productId       String?
   product         Product? @relation(fields: [productId], references: [id])
-  productName     String
-  productNameSi   String?
+  productName     String   @db.Text   // 🌟 දිගු package නම් ගබඩා කිරීමට VARCHAR වෙනුවට TEXT
+  productNameSi   String?  @db.Text   // 🌟 සිංහල package විස්තර සඳහා TEXT
   variantId       String?
   size            String?
   quantity        Float

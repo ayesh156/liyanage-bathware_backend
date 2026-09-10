@@ -301,10 +301,13 @@ function toDTO(record: any): ProductDTO {
     displayPrice: Number(record.displayPrice),
     storeQty: record.storeQty,
     salesType: record.salesType,
-    status: mapStatusFromDb(record.status) as ProductStatusType,
-    createdAt: record.createdAt?.toISOString(),
-    updatedAt: record.updatedAt?.toISOString(),
-  };
+  status: mapStatusFromDb(record.status) as ProductStatusType,
+  // ── Package DTO Mapping ──
+  isPackage: Boolean(record.isPackage),
+  packageItems: record.packageItems ?? undefined,
+  createdAt: record.createdAt?.toISOString(),
+  updatedAt: record.updatedAt?.toISOString(),
+};
 }
 
 // ── Service Class ──
@@ -522,27 +525,33 @@ export class ProductService {
     const userProvidedNo = optionalStringOrNull(payload.no);
     const resolvedNo = userProvidedNo ?? (await generateProductNo());
 
-    const createData = {
-      id: generatedId,
-      no: resolvedNo,
-      searchKey,
-      name,
-      nameSinhala,
-      nameSi,
-      productCategory: resolved.productCategory,
-      categoryId: resolved.categoryId,
-      categorySi,
-      barcode,
-      cost,
-      lastPrice,
-      salesPrice,
-      displayPrice,
-      storeQty,
-      salesType,
-      status: dbStatus as any,
-      createdAt: now,
-      updatedAt: now,
-    };
+    // ── Package Data Mapping ──
+  const isPackage = Boolean(payload.isPackage ?? false);
+  const packageItems = payload.packageItems ? (payload.packageItems as Prisma.InputJsonValue) : Prisma.JsonNull;
+
+  const createData = {
+    id: generatedId,
+    no: resolvedNo,
+    searchKey,
+    name,
+    nameSinhala,
+    nameSi,
+    productCategory: resolved.productCategory,
+    categoryId: resolved.categoryId,
+    categorySi,
+    barcode,
+    cost,
+    lastPrice,
+    salesPrice,
+    displayPrice,
+    storeQty,
+    salesType,
+    status: dbStatus as any,
+    isPackage,
+    packageItems,
+    createdAt: now,
+    updatedAt: now,
+  };
 
     try {
       const item = await prisma.product.create({ data: createData });
@@ -616,6 +625,13 @@ export class ProductService {
     if (enriched.displayPrice !== undefined) updateData.displayPrice = enriched.displayPrice;
     if (enriched.storeQty !== undefined) updateData.storeQty = enriched.storeQty;
     if (enriched.salesType !== undefined) updateData.salesType = enriched.salesType;
+
+    // 🌟 [PACKAGE EDIT FIX] Package fields updateData එකට ඇතුළත් කිරීම
+    const rawInput = input as any;
+    if (rawInput.isPackage !== undefined) updateData.isPackage = Boolean(rawInput.isPackage);
+    if (rawInput.packageItems !== undefined) {
+      updateData.packageItems = rawInput.packageItems ? rawInput.packageItems : Prisma.JsonNull;
+    }
 
     // If storeQty was updated, auto-derive status
     if (enriched.storeQty !== undefined) {
