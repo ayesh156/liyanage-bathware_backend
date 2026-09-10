@@ -5,8 +5,8 @@ import cookieParser from 'cookie-parser';
 import prisma from './lib/prisma.js';
 import router from './routes/index.js';
 import { errorHandler } from './middlewares/errorHandler.middleware.js';
-// 🌟 අලුත් SSE router එක import කිරීම
-import { syncRouter } from './gateways/checkoutSync.gateway.js';
+// 🌟 [TEMP DISABLED] Live SSE Gateway - අවශ්‍ය වූ විට uncomment කරන්න
+// import { syncRouter } from './gateways/checkoutSync.gateway.js';
 
 const app = express();
 
@@ -76,8 +76,8 @@ app.use((req, _res, next) => {
   next();
 });
 
-// 🌟 /api/sync යටතේ SSE Routes ටික mount කිරීම
-app.use('/api/sync', syncRouter);
+// 🌟 [TEMP DISABLED] /api/sync යටතේ SSE Routes ටික mount කිරීම
+// app.use('/api/sync', syncRouter);
 app.use('/api', router);
 app.use(errorHandler);
 
@@ -106,7 +106,7 @@ async function startServer() {
   await runSelfHealing();
   httpServer.listen(PORT, () => {
     console.log(`\n🚀 Bathware POS System API listening on port ${PORT}\n`);
-    console.log(`📡 SSE Gateway active at /api/sync/stream\n`);
+    // console.log(`📡 SSE Gateway active at /api/sync/stream\n`);
   });
 }
 
