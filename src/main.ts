@@ -1,48 +1,51 @@
-import 'dotenv/config';
-import express from 'express';
-import cookieParser from 'cookie-parser';
-import cors from 'cors';
-import prisma from './lib/prisma.js';
-import router from './routes/index.js';
-import { errorHandler } from './middlewares/errorHandler.middleware.js';
+import "dotenv/config";
+import express from "express";
+import cookieParser from "cookie-parser";
+import cors from "cors";
+import prisma from "./lib/prisma.js";
+import router from "./routes/index.js";
+import { errorHandler } from "./middlewares/errorHandler.middleware.js";
 
 const app = express();
 
-app.set('trust proxy', 1);
+app.set("trust proxy", 1);
 
-const PORT = parseInt(process.env.PORT || '3002', 10);
+const PORT = parseInt(process.env.PORT || "3002", 10);
 
 // [BEST PRACTICE] Express Standard CORS Handling
-app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "https://liyanage.ecosystemlk.app",
-    "https://api.liyanage.ecosystemlk.app",
-    "https://lbd.ecosystemlk.app",
-    process.env.CORS_ORIGIN || ""
-  ].filter(Boolean), 
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-}));
+app.use(
+  cors({
+    origin: [
+      "https://lbd.ecosystemlk.app",
+      "https://api.lbd.ecosystemlk.app",
+      "http://localhost:5173",
+      "http://127.0.0.1:5173",
+      process.env.CORS_ORIGIN || "",
+    ].filter(Boolean),
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  }),
+);
 
 // Body Parsers & Cookie Parser
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // Simple Request Logger
 app.use((req, res, next) => {
   const start = Date.now();
-  res.on('finish', () => {
+  res.on("finish", () => {
     const duration = Date.now() - start;
-    console.log(`[${req.method}] ${req.originalUrl} → ${res.statusCode} (${duration}ms)`);
+    console.log(
+      `[${req.method}] ${req.originalUrl} → ${res.statusCode} (${duration}ms)`,
+    );
   });
   next();
 });
 
 // API Routes & Error Handler
-app.use('/api', router);
+app.use("/api", router);
 app.use(errorHandler);
 
 // [BEST PRACTICE] Pure Express Server Listener (No http module wrapper needed)
@@ -56,35 +59,37 @@ function handleGracefulShutdown(signal: string) {
   if (isShuttingDown) return;
   isShuttingDown = true;
 
-  console.log(`\n[lsnode] Received ${signal}. Closing Express server and database gracefully...`);
+  console.log(
+    `\n[lsnode] Received ${signal}. Closing Express server and database gracefully...`,
+  );
 
   server.close(async () => {
     try {
       await prisma.$disconnect();
-      console.log('[lsnode] Database disconnected cleanly.');
+      console.log("[lsnode] Database disconnected cleanly.");
       process.exit(0);
     } catch (err) {
-      console.error('[lsnode] Error during database disconnect:', err);
+      console.error("[lsnode] Error during database disconnect:", err);
       process.exit(1);
     }
   });
 
   setTimeout(() => {
-    console.error('[lsnode] Force exiting after 5s timeout.');
+    console.error("[lsnode] Force exiting after 5s timeout.");
     process.exit(1);
   }, 5000).unref();
 }
 
-process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
+process.on("SIGTERM", () => handleGracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => handleGracefulShutdown("SIGINT"));
 
 // Process Protection
-process.on('unhandledRejection', (reason: any) => {
-  console.error('[lsnode] Unhandled Promise Rejection trapped:', reason);
+process.on("unhandledRejection", (reason: any) => {
+  console.error("[lsnode] Unhandled Promise Rejection trapped:", reason);
 });
 
-process.on('uncaughtException', (err: Error) => {
-  console.error('[lsnode] Uncaught Exception trapped:', err);
+process.on("uncaughtException", (err: Error) => {
+  console.error("[lsnode] Uncaught Exception trapped:", err);
 });
 
 export default app;
