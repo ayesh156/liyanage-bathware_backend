@@ -1,12 +1,10 @@
 import 'dotenv/config';
-import http from 'http';
-import express, { Request, Response, NextFunction } from 'express';
+import express from 'express';
 import cookieParser from 'cookie-parser';
+import cors from 'cors';
 import prisma from './lib/prisma.js';
 import router from './routes/index.js';
 import { errorHandler } from './middlewares/errorHandler.middleware.js';
-// 🌟 [TEMP DISABLED] Live SSE Gateway - අවශ්‍ය වූ විට uncomment කරන්න
-// import { syncRouter } from './gateways/checkoutSync.gateway.js';
 
 const app = express();
 
@@ -14,117 +12,56 @@ app.set('trust proxy', 1);
 
 const PORT = parseInt(process.env.PORT || '3002', 10);
 
-export function isOriginAllowed(origin: string | undefined): boolean {
-  if (!origin) return true;
-  const cleanOrigin = origin.split(',')[0].trim();
+// [BEST PRACTICE] Express Standard CORS Handling
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://liyanage.ecosystemlk.app",
+    "https://api.liyanage.ecosystemlk.app",
+    "https://lbd.ecosystemlk.app",
+    process.env.CORS_ORIGIN || ""
+  ].filter(Boolean), 
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+}));
 
-  if (/^https?:\/\/localhost(:\d+)?$/i.test(cleanOrigin)) return true;
-  if (/^https?:\/\/127\.0\.0\.1(:\d+)?$/i.test(cleanOrigin)) return true;
-  if (/^https:\/\/liyanage\.ecosystemlk\.app\/?$/i.test(cleanOrigin)) return true;
-  if (/^https:\/\/api\.liyanage\.ecosystemlk\.app\/?$/i.test(cleanOrigin)) return true;
-
-  const envOrigin = process.env.CORS_ORIGIN;
-  if (envOrigin) {
-    const cleanEnv = envOrigin.replace(/\/$/, '');
-    const cleanTarget = cleanOrigin.replace(/\/$/, '');
-    if (cleanEnv.toLowerCase() === cleanTarget.toLowerCase()) return true;
-  }
-
-  return false;
-}
-
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const originalSetHeader = res.setHeader.bind(res);
-  res.setHeader = function (name: string, value: any) {
-    if (name.toLowerCase() === 'access-control-allow-origin' && typeof value === 'string') {
-      value = value.split(',')[0].trim();
-    }
-    return originalSetHeader(name, value);
-  };
-
-  const origin = req.headers.origin;
-  res.setHeader('Vary', 'Origin');
-
-  const allowedOrigin = (origin && isOriginAllowed(origin)) 
-    ? origin.split(',')[0].trim() 
-    : 'https://lbd.ecosystemlk.app';
-
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Expose-Headers', 'Set-Cookie');
-
-  if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie');
-    res.setHeader('Access-Control-Max-Age', '86400');
-    return res.status(204).end();
-  }
-
-  next();
-});
-
+// Body Parsers & Cookie Parser
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-app.use((req, _res, next) => {
+// Simple Request Logger
+app.use((req, res, next) => {
   const start = Date.now();
-  _res.on('finish', () => {
+  res.on('finish', () => {
     const duration = Date.now() - start;
-    console.log(`[${req.method}] ${req.originalUrl} → ${_res.statusCode} (${duration}ms)`);
+    console.log(`[${req.method}] ${req.originalUrl} → ${res.statusCode} (${duration}ms)`);
   });
   next();
 });
 
-// 🌟 [TEMP DISABLED] /api/sync යටතේ SSE Routes ටික mount කිරීම
-// app.use('/api/sync', syncRouter);
+// API Routes & Error Handler
 app.use('/api', router);
 app.use(errorHandler);
 
-async function runSelfHealing(): Promise<void> {
-  try {
-    const damagedCustomers = await prisma.customer.findMany({
-      where: { loanBalance: { lt: 0 } },
-      select: { id: true, name: true, loanBalance: true },
-    });
-    if (damagedCustomers.length > 0) {
-      for (const c of damagedCustomers) {
-        await prisma.customer.update({
-          where: { id: c.id },
-          data: { loanBalance: 0, updatedAt: new Date() },
-        });
-      }
-    }
-  } catch (err) {
-    console.error(`\n⚠️ Self-healing initialization failed:`, (err as Error).message);
-  }
-}
+// [BEST PRACTICE] Pure Express Server Listener (No http module wrapper needed)
+const server = app.listen(PORT, () => {
+  console.log(`\n🚀 Bathware POS System API listening on port ${PORT}\n`);
+});
 
-const httpServer = http.createServer(app);
-
-async function startServer() {
-  await runSelfHealing();
-  httpServer.listen(PORT, () => {
-    console.log(`\n🚀 Bathware POS System API listening on port ${PORT}\n`);
-    // console.log(`📡 SSE Gateway active at /api/sync/stream\n`);
-  });
-}
-
-startServer();
-
-// 🛡️ 1. OpenLiteSpeed (lsnode) Safe Graceful Shutdown Hook
+// 🛡️ OpenLiteSpeed / PM2 Safe Graceful Shutdown Hook
 let isShuttingDown = false;
 function handleGracefulShutdown(signal: string) {
   if (isShuttingDown) return;
   isShuttingDown = true;
 
-  console.log(`\n[lsnode] Received ${signal}. Closing HTTP server and database gracefully...`);
+  console.log(`\n[lsnode] Received ${signal}. Closing Express server and database gracefully...`);
 
-  // Stop accepting new connections
-  httpServer.close(async () => {
+  server.close(async () => {
     try {
       await prisma.$disconnect();
-      console.log('[lsnode] Database disconnected. Exiting cleanly.');
+      console.log('[lsnode] Database disconnected cleanly.');
       process.exit(0);
     } catch (err) {
       console.error('[lsnode] Error during database disconnect:', err);
@@ -132,7 +69,6 @@ function handleGracefulShutdown(signal: string) {
     }
   });
 
-  // Safe Timeout: Close forcibly if background sockets fail to exit within 5s
   setTimeout(() => {
     console.error('[lsnode] Force exiting after 5s timeout.');
     process.exit(1);
@@ -142,7 +78,7 @@ function handleGracefulShutdown(signal: string) {
 process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
 
-// 🛡️ 2. Prevent Unexpected Daemon Crashes (Unhandled Rejection Trap)
+// Process Protection
 process.on('unhandledRejection', (reason: any) => {
   console.error('[lsnode] Unhandled Promise Rejection trapped:', reason);
 });
