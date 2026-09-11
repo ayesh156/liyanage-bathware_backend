@@ -2,6 +2,7 @@ import 'dotenv/config';
 import http from 'http';
 import express, { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
+import cors from 'cors';
 import prisma from './lib/prisma.js';
 import router from './routes/index.js';
 import { errorHandler } from './middlewares/errorHandler.middleware.js';
@@ -12,63 +13,48 @@ const app = express();
 
 app.set('trust proxy', 1);
 
-const PORT = parseInt(process.env.PORT || '3002', 10);
+// ── BULLETPROOF PRODUCTION CORS CONFIGURATION ────────────────
+const allowedOrigins = [
+  'https://lbd.ecosystemlk.app',
+  'https://api.lbd.ecosystemlk.app',
+  'https://liyanage.ecosystemlk.app',
+  'https://api.liyanage.ecosystemlk.app',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3002',
+  process.env.CORS_ORIGIN || ''
+].filter(Boolean);
 
-export function isOriginAllowed(origin: string | undefined): boolean {
-  if (!origin) return true;
-  const cleanOrigin = origin.split(',')[0].trim();
+app.use(cors({
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean | string) => void) => {
+    // 1. Mobile apps, Server-to-server, curl හෝ same-origin (origin header නැති) requests allow කිරීම
+    if (!origin) return callback(null, true);
 
-  if (/^https?:\/\/localhost(:\d+)?$/i.test(cleanOrigin)) return true;
-  if (/^https?:\/\/127\.0\.0\.1(:\d+)?$/i.test(cleanOrigin)) return true;
-  if (/^https:\/\/liyanage\.ecosystemlk\.app\/?$/i.test(cleanOrigin)) return true;
-  if (/^https:\/\/api\.liyanage\.ecosystemlk\.app\/?$/i.test(cleanOrigin)) return true;
+    const cleanOrigin = origin.replace(/\/+$/, '');
+    const isAllowed = allowedOrigins.some(item => cleanOrigin === item.replace(/\/+$/, '')) ||
+                      /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(cleanOrigin);
 
-  const envOrigin = process.env.CORS_ORIGIN;
-  if (envOrigin) {
-    const cleanEnv = envOrigin.replace(/\/$/, '');
-    const cleanTarget = cleanOrigin.replace(/\/$/, '');
-    if (cleanEnv.toLowerCase() === cleanTarget.toLowerCase()) return true;
-  }
-
-  return false;
-}
-
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const originalSetHeader = res.setHeader.bind(res);
-  res.setHeader = function (name: string, value: any) {
-    if (name.toLowerCase() === 'access-control-allow-origin' && typeof value === 'string') {
-      value = value.split(',')[0].trim();
+    if (isAllowed) {
+      return callback(null, cleanOrigin);
     }
-    return originalSetHeader(name, value);
-  };
 
-  const origin = req.headers.origin;
-  res.setHeader('Vary', 'Origin');
+    // 2. Safe Fallback: කවදාවත් new Error() throw නොකර primary frontend echo කරයි
+    return callback(null, 'https://lbd.ecosystemlk.app');
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['Set-Cookie'],
+  maxAge: 86400 // 24 hours preflight cache
+}));
 
-  const allowedOrigin = (origin && isOriginAllowed(origin)) 
-    ? origin.split(',')[0].trim() 
-    : 'https://lbd.ecosystemlk.app';
-
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Expose-Headers', 'Set-Cookie');
-
-  if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie');
-    res.setHeader('Access-Control-Max-Age', '86400');
-    return res.status(204).end();
-  }
-
-  next();
-});
-
-
+// Body Parsers & Cookie Parser
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-app.use((req, _res, next) => {
+// Request Logger
+app.use((req: Request, _res: Response, next: NextFunction) => {
   const start = Date.now();
   _res.on('finish', () => {
     const duration = Date.now() - start;
@@ -79,9 +65,24 @@ app.use((req, _res, next) => {
 
 // 🌟 [TEMP DISABLED] /api/sync යටතේ SSE Routes ටික mount කිරීම
 // app.use('/api/sync', syncRouter);
+
+// API Routes
 app.use('/api', router);
+
+// Error Handler එකට කලින් CORS headers attach වන බව තහවුරු කිරීම (500 Error වලදී CORS drop වීම වැළැක්වීමට)
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin.replace(/\/+$/, ''));
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+  next(err);
+});
+
+// Default App Error Handler
 app.use(errorHandler);
 
+// Self Healing Routine
 async function runSelfHealing(): Promise<void> {
   try {
     const damagedCustomers = await prisma.customer.findMany({
@@ -101,19 +102,32 @@ async function runSelfHealing(): Promise<void> {
   }
 }
 
+// ── HTTP Server & OpenLiteSpeed lsnode Dual Support ───────────
 const httpServer = http.createServer(app);
 
+// OpenLiteSpeed lsnode pipe socket සහ Local Port dual-support
+const isLSNode = Boolean(process.env.LSAPI_CHILDREN);
+const LISTEN_PORT = isLSNode ? undefined : (process.env.PORT ? parseInt(process.env.PORT, 10) : 3002);
+
 async function startServer() {
-  await runSelfHealing();
-  httpServer.listen(PORT, () => {
-    console.log(`\n🚀 Bathware POS System API listening on port ${PORT}\n`);
-    // console.log(`📡 SSE Gateway active at /api/sync/stream\n`);
-  });
+  if (LISTEN_PORT) {
+    // Local / Standalone Mode
+    httpServer.listen(LISTEN_PORT, () => {
+      console.log(`\n🚀 Bathware POS System API listening on port ${LISTEN_PORT}\n`);
+      runSelfHealing().catch((err) => console.error('Background self-healing error:', err));
+    });
+  } else {
+    // OpenLiteSpeed Native Pipe Mode
+    httpServer.listen(() => {
+      console.log('🚀 Bathware POS System API started via OpenLiteSpeed lsnode pipe');
+      runSelfHealing().catch((err) => console.error('Background self-healing error:', err));
+    });
+  }
 }
 
 startServer();
 
-// 🛡️ 1. OpenLiteSpeed (lsnode) Safe Graceful Shutdown Hook
+// 🛡️ OpenLiteSpeed (lsnode) Safe Graceful Shutdown Hook
 let isShuttingDown = false;
 function handleGracefulShutdown(signal: string) {
   if (isShuttingDown) return;
@@ -121,7 +135,6 @@ function handleGracefulShutdown(signal: string) {
 
   console.log(`\n[lsnode] Received ${signal}. Closing HTTP server and database gracefully...`);
 
-  // Stop accepting new connections
   httpServer.close(async () => {
     try {
       await prisma.$disconnect();
@@ -133,7 +146,6 @@ function handleGracefulShutdown(signal: string) {
     }
   });
 
-  // Safe Timeout: Close forcibly if background sockets fail to exit within 5s
   setTimeout(() => {
     console.error('[lsnode] Force exiting after 5s timeout.');
     process.exit(1);
@@ -143,7 +155,7 @@ function handleGracefulShutdown(signal: string) {
 process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
 
-// 🛡️ 2. Prevent Unexpected Daemon Crashes (Unhandled Rejection Trap)
+// Process Protection
 process.on('unhandledRejection', (reason: any) => {
   console.error('[lsnode] Unhandled Promise Rejection trapped:', reason);
 });
