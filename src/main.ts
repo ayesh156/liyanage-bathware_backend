@@ -12,51 +12,19 @@ app.set('trust proxy', 1);
 
 const PORT = parseInt(process.env.PORT || '3002', 10);
 
-// Support a comma-separated CORS_ORIGIN env value (e.g. "https://a.com,https://b.com")
-// Previously a multi-origin env string was compared as a single string and always failed.
-const envOrigins = (process.env.CORS_ORIGIN || '')
-  .split(',')
-  .map((o) => o.trim())
-  .filter(Boolean);
-
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "https://liyanage.ecosystemlk.app",
-  "https://api.liyanage.ecosystemlk.app",
-  "https://lbd.ecosystemlk.app",
-  ...envOrigins,
-];
-
-// 🌐 [STANDARD EXPRESS CORS] Pure Express Level CORS Handling
+// [BEST PRACTICE] Express Standard CORS Handling
 app.use(cors({
-  origin: (origin, callback) => {
-    // Postman / Server-to-Server requests (no Origin header) or allowed origins → pass
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.warn(`[CORS] Blocked request from origin: ${origin}`);
-      // IMPORTANT: pass `false` instead of throwing an Error.
-      // Throwing here sends the rejection to Express's default error
-      // handler, which returns an HTML error page with NO CORS headers —
-      // the browser then reports a generic "CORS error" that hides the
-      // real 403 reason. Passing `false` makes the cors package itself
-      // respond correctly (no CORS headers on that origin, as intended).
-      callback(null, false);
-    }
-  },
+  origin: [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://liyanage.ecosystemlk.app",
+    "https://api.liyanage.ecosystemlk.app",
+    "https://lbd.ecosystemlk.app",
+    process.env.CORS_ORIGIN || ""
+  ].filter(Boolean), 
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 }));
-
-// REMOVED: app.options('*', cors());
-// A bare '*' wildcard route crashes at startup under path-to-regexp v6+
-// (shipped with Express 4.21+ and all of Express 5). The cors() middleware
-// mounted above already answers OPTIONS preflight requests automatically
-// for every route — no separate handler is needed. If you're pinned to an
-// older express/path-to-regexp and must add one explicitly, use a named
-// wildcard instead: app.options('/*splat', cors());
 
 // Body Parsers & Cookie Parser
 app.use(express.json({ limit: '10mb' }));
@@ -77,10 +45,9 @@ app.use((req, res, next) => {
 app.use('/api', router);
 app.use(errorHandler);
 
-// Pure Express Server Listener
+// [BEST PRACTICE] Pure Express Server Listener (No http module wrapper needed)
 const server = app.listen(PORT, () => {
   console.log(`\n🚀 Bathware POS System API listening on port ${PORT}\n`);
-  console.log(`[CORS] Allowed origins: ${allowedOrigins.join(', ')}`);
 });
 
 // 🛡️ OpenLiteSpeed / PM2 Safe Graceful Shutdown Hook
