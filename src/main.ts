@@ -21,34 +21,22 @@ const allowedOrigins = [
   process.env.CORS_ORIGIN || ""
 ].filter(Boolean);
 
-// 🛡️ [FORCE CORS FIX] OpenLiteSpeed Preflight & Header Enforcement Middleware
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-  } else {
-    res.header('Access-Control-Allow-Origin', 'https://lbd.ecosystemlk.app');
-  }
-
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.header('Access-Control-Allow-Credentials', 'true');
-
-  // OPTIONS (Preflight) Requests සෘජුවම Response 204 දී නිම කිරීම
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
-  }
-  next();
-});
-
-// Express Standard CORS Handling
+// 🌐 [STANDARD EXPRESS CORS] Pure Express Level CORS Handling
 app.use(cors({
-  origin: allowedOrigins,
+  origin: (origin, callback) => {
+    // Postman / Server-to-Server Requests (no origin) හෝ Allowed Origins වල තියෙනවා නම් Allow කරන්න
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS Policy: Access Denied for this origin'));
+    }
+  },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 }));
 
-// Global Preflight Explicit Route Options
+// Global Preflight Explicit Handling
 app.options('*', cors());
 
 // Body Parsers & Cookie Parser
