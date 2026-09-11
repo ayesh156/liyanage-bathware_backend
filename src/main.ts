@@ -12,19 +12,38 @@ app.set('trust proxy', 1);
 
 const PORT = parseInt(process.env.PORT || '3002', 10);
 
-// [BEST PRACTICE] Express Standard CORS Handling
-app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "https://liyanage.ecosystemlk.app",
-    "https://api.liyanage.ecosystemlk.app",
-    "https://lbd.ecosystemlk.app",
-    process.env.CORS_ORIGIN || ""
-  ].filter(Boolean), 
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-}));
+// [BEST PRACTICE] Production Dynamic CORS Handling
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://liyanage.ecosystemlk.app',
+  'https://api.liyanage.ecosystemlk.app',
+  'https://lbd.ecosystemlk.app',
+  ...(process.env.CORS_ORIGIN ? [process.env.CORS_ORIGIN.replace(/\/$/, '')] : []),
+];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Mobile apps, curl, or Postman requests typically have no origin header
+      if (!origin) return callback(null, true);
+
+      const isAllowed = allowedOrigins.some(
+        (allowed) => allowed.toLowerCase() === origin.trim().toLowerCase()
+      );
+
+      if (isAllowed) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS policy violation: ${origin} not allowed`));
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With'],
+    exposedHeaders: ['Set-Cookie'],
+  })
+);
 
 // Body Parsers & Cookie Parser
 app.use(express.json({ limit: '10mb' }));
