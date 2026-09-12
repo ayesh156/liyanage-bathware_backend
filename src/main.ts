@@ -1,17 +1,43 @@
-import 'dotenv/config';
 import http from 'http';
 import express, { Request, Response, NextFunction } from 'express';
+import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import prisma from './lib/prisma.js';
+import { prisma, connectDB } from './lib/prisma.js';
 import router from './routes/index.js';
 import { errorHandler } from './middlewares/errorHandler.middleware.js';
 // 🌟 [TEMP DISABLED] Live SSE Gateway - අවශ්‍ය වූ විට uncomment කරන්න
 // import { syncRouter } from './gateways/checkoutSync.gateway.js';
 
+
+// 📁 .env Load with explicit terminal output (Ultra Smart Shop pattern)
+const envPaths = [
+  path.join(process.cwd(), '.env'),
+  path.join(process.cwd(), 'backend', '.env'),
+];
+
+for (const envPath of envPaths) {
+  if (fs.existsSync(envPath)) {
+    console.log(`📁 Loading .env from: ${envPath}`);
+    dotenv.config({ path: envPath });
+    break;
+  }
+}
+
 const app = express();
 
 app.set('trust proxy', 1);
+
+// [FIX] Clean comma-separated origin headers from reverse proxies to prevent CORS failures
+app.use((req, _res, next) => {
+  const origin = req.headers.origin;
+  if (origin && typeof origin === 'string' && origin.includes(',')) {
+    req.headers.origin = origin.split(',')[0].trim();
+  }
+  next();
+});
 
 // ── BULLETPROOF PRODUCTION CORS CONFIGURATION ────────────────
 const allowedOrigins = [
@@ -66,6 +92,11 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 // 🌟 [TEMP DISABLED] /api/sync යටතේ SSE Routes ටික mount කිරීම
 // app.use('/api/sync', syncRouter);
 
+// Health Check endpoint for uptime monitoring & stress testing (outside rate-limiters)
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // API Routes
 app.use('/api', router);
 
@@ -109,19 +140,31 @@ const httpServer = http.createServer(app);
 const isLSNode = Boolean(process.env.LSAPI_CHILDREN);
 const LISTEN_PORT = isLSNode ? undefined : (process.env.PORT ? parseInt(process.env.PORT, 10) : 3002);
 
+// Verified startup sequence: Connects database & prints environment status
 async function startServer() {
-  if (LISTEN_PORT) {
-    // Local / Standalone Mode
-    httpServer.listen(LISTEN_PORT, () => {
-      console.log(`\n🚀 Bathware POS System API listening on port ${LISTEN_PORT}\n`);
-      runSelfHealing().catch((err) => console.error('Background self-healing error:', err));
-    });
-  } else {
-    // OpenLiteSpeed Native Pipe Mode
-    httpServer.listen(() => {
-      console.log('🚀 Bathware POS System API started via OpenLiteSpeed lsnode pipe');
-      runSelfHealing().catch((err) => console.error('Background self-healing error:', err));
-    });
+  try {
+    // 1. Verify MariaDB Driver Adapter pool connection first
+    await connectDB();
+
+    // 2. Start HTTP Listener based on environment
+    if (LISTEN_PORT) {
+      // Local / Standalone Mode
+      httpServer.listen(LISTEN_PORT, () => {
+        console.log(`🚀 API running on http://localhost:${LISTEN_PORT}`);
+        console.log(`⚙️  Environment: ${process.env.NODE_ENV || 'development'}`);
+        runSelfHealing().catch((err) => console.error('Background self-healing error:', err));
+      });
+    } else {
+      // OpenLiteSpeed Native Pipe Mode
+      httpServer.listen(() => {
+        console.log('🚀 API running via OpenLiteSpeed lsnode pipe');
+        console.log(`⚙️  Environment: ${process.env.NODE_ENV || 'production'}`);
+        runSelfHealing().catch((err) => console.error('Background self-healing error:', err));
+      });
+    }
+  } catch (error) {
+    console.error('❌ Failed to start server due to database connection failure:', error);
+    process.exit(1);
   }
 }
 

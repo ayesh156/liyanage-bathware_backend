@@ -33,4 +33,15 @@ if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
 
+// Database connection check helper with connection pool verification
+export async function connectDB() {
+  try {
+    await prisma.$connect();
+    console.log('✅ MariaDB Driver Adapter connected successfully (Max pool: 5)');
+  } catch (error) {
+    console.error('❌ Database connection failed:', error);
+    throw error;
+  }
+}
+
 export default prisma;
