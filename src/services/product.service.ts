@@ -58,16 +58,10 @@ async function generateProductId(currentUser?: { role?: string; username?: strin
   return `${prefix}${padded}`;
 }
 
-// ── Sequential Product No Generation (6-char numeric string, starts at 1000) ──
+// ── Sequential Product No Generation (Preserves Leading Zeros) ──
 async function generateProductNo(): Promise<string> {
-  // STRICT LAST-INSERTED INCREMENT ALGORITHM:
-  // 1. Fetch the MOST RECENTLY CREATED product (createdAt DESC).
-  // 2. If it exists, candidate = lastNo + 1.
-  // 3. If candidate is NOT in the DB, return candidate immediately.
-  // 4. If candidate IS taken, fall back to global MAX(no) + 1.
-  // 5. Only when DB has ZERO products, return '1001'.
-  // NOTE: No hardcoded '1000' fallback anywhere.
-
+  // STRICT LAST-INSERTED INCREMENT ALGORITHM WITH ZERO PADDING:
+  
   // Step 1: Most recently created product
   const lastProduct = await prisma.product.findFirst({
     where: { isDeleted: false },
@@ -75,29 +69,38 @@ async function generateProductNo(): Promise<string> {
     select: { no: true },
   });
 
-  // Step 5: Empty DB -> start at 1001 (not 1000)
+  // Step 5: Empty DB -> start at 1001
   if (!lastProduct || !lastProduct.no) {
     return '1001';
   }
 
-  const lastNo = parseInt(lastProduct.no, 10);
+  const originalNoStr = lastProduct.no.trim();
+  const padLength = originalNoStr.length; // 🌟 මුල් අංකයේ දිග (length) ලබාගැනීම (උදා: "02" නම් 2 යි)
+  const lastNo = parseInt(originalNoStr, 10);
+
   if (isNaN(lastNo)) {
-    // Non-numeric last no -> max numeric + 1
+    // Non-numeric last no -> max numeric + 1 with corresponding padding
     const allRecords = await prisma.product.findMany({
       where: { isDeleted: false },
       select: { no: true },
     });
     let maxNo = 0;
+    let maxPad = 0;
     for (const r of allRecords) {
-      const parsed = parseInt(r.no ?? '', 10);
-      if (!isNaN(parsed) && parsed > maxNo) maxNo = parsed;
+      const str = (r.no ?? '').trim();
+      const parsed = parseInt(str, 10);
+      if (!isNaN(parsed) && parsed > maxNo) {
+        maxNo = parsed;
+        maxPad = str.length;
+      }
     }
-    return String(maxNo > 0 ? maxNo + 1 : 1001);
+    return maxNo > 0 ? String(maxNo + 1).padStart(maxPad, '0') : '1001';
   }
 
   // Step 2: candidate = last number + 1
   const candidateNo = lastNo + 1;
-  const candidateStr = String(candidateNo);
+  // 🌟 [FIX] අලුත් අංකය සෑදීමේදී මුල් අංකයේ දිගට සමාන වන සේ 0 යෙදීම (උදා: 2 -> "03")
+  const candidateStr = String(candidateNo).padStart(padLength, '0');
 
   // Step 3: Check if candidate already exists
   const existingCandidate = await prisma.product.findFirst({
@@ -105,7 +108,6 @@ async function generateProductNo(): Promise<string> {
     select: { id: true },
   });
 
-  // Step 3 continued: candidate free -> return it
   if (!existingCandidate) {
     return candidateStr;
   }
@@ -116,11 +118,16 @@ async function generateProductNo(): Promise<string> {
     select: { no: true },
   });
   let maxNo2 = 0;
+  let maxPad2 = 0;
   for (const r of allRecords2) {
-    const parsed = parseInt(r.no ?? '', 10);
-    if (!isNaN(parsed) && parsed > maxNo2) maxNo2 = parsed;
+    const str = (r.no ?? '').trim();
+    const parsed = parseInt(str, 10);
+    if (!isNaN(parsed) && parsed > maxNo2) {
+      maxNo2 = parsed;
+      maxPad2 = str.length;
+    }
   }
-  return String(maxNo2 > 0 ? maxNo2 + 1 : 1001);
+  return maxNo2 > 0 ? String(maxNo2 + 1).padStart(maxPad2, '0') : '1001';
 }
 
 // ── Status Mapping ──
