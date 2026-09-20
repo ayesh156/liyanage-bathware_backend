@@ -133,7 +133,25 @@ async function runSelfHealing(): Promise<void> {
   }
 }
 
-// ── HTTP Server & OpenLiteSpeed lsnode Dual Support ───────────
+// 🌟 [NEW FUNCTION 2026-09-20] Database Keep-Alive Ping
+// MySQL server config එකේ wait_timeout=30s නිසා, Prisma pool එකේ connections
+// idle වෙලා 30s ට වඩා ගියොත් MySQL server එකෙන්ම ඒ socket එක silently kill
+// කරනවා. මේ function එකෙන් සෑම තත්පර 20කටම (30s wait_timeout එකට කලින්)
+// සැහැල්ලු "SELECT 1" query එකක් run කරලා connection එක active/alive විදිහට
+// තියාගන්නවා — ඒකෙන් idle-timeout kill වීම සම්පූර්ණයෙන්ම වළක්වනවා.
+let keepAliveInterval: NodeJS.Timeout | undefined;
+function startKeepAlivePing(): void {
+  keepAliveInterval = setInterval(async () => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch (err) {
+      console.error('[Keep-Alive] Ping failed:', (err as Error).message);
+    }
+  }, 20000); // 20s — MySQL wait_timeout (30s) එකට කලින් ping කරනවා
+  keepAliveInterval.unref(); // process exit එකක් keep-alive interval එකෙන් block වෙන එක වළක්වනවා
+}
+
+// ── HTTP Server & OpenLiteSpeed lsnode Dual
 const httpServer = http.createServer(app);
 
 // OpenLiteSpeed lsnode pipe socket සහ Local Port dual-support
@@ -153,6 +171,7 @@ async function startServer() {
         console.log(`🚀 API running on http://localhost:${LISTEN_PORT}`);
         console.log(`⚙️  Environment: ${process.env.NODE_ENV || 'development'}`);
         runSelfHealing().catch((err) => console.error('Background self-healing error:', err));
+        startKeepAlivePing(); // 🌟 [NEW 2026-09-20] DB idle-timeout kill වීම වළක්වන keep-alive ping start කිරීම
       });
     } else {
       // OpenLiteSpeed Native Pipe Mode
@@ -160,6 +179,7 @@ async function startServer() {
         console.log('🚀 API running via OpenLiteSpeed lsnode pipe');
         console.log(`⚙️  Environment: ${process.env.NODE_ENV || 'production'}`);
         runSelfHealing().catch((err) => console.error('Background self-healing error:', err));
+        startKeepAlivePing(); // 🌟 [NEW 2026-09-20] DB idle-timeout kill වීම වළක්වන keep-alive ping start කිරීම
       });
     }
   } catch (error) {
@@ -177,6 +197,10 @@ function handleGracefulShutdown(signal: string) {
   isShuttingDown = true;
 
   console.log(`\n[lsnode] Received ${signal}. Closing HTTP server and database gracefully...`);
+
+  // 🌟 [NEW 2026-09-20] Shutdown වෙද්දී keep-alive interval එකත් clear කරනවා —
+  // .unref() කරලා තිබ්බත්, explicit clearInterval එකෙන් clean shutdown එකක් සහතික කරනවා.
+  if (keepAliveInterval) clearInterval(keepAliveInterval);
 
   httpServer.close(async () => {
     try {
