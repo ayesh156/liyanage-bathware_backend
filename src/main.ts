@@ -5,14 +5,10 @@ import path from 'path';
 import fs from 'fs';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import { prisma, connectDB } from './lib/prisma.js';
-import router from './routes/index.js';
-import { errorHandler } from './middlewares/errorHandler.middleware.js';
-// 🌟 [TEMP DISABLED] Live SSE Gateway - අවශ්‍ය වූ විට uncomment කරන්න
-// import { syncRouter } from './gateways/checkoutSync.gateway.js';
+import { prisma, connectDB } from './lib/prisma.ts';
+import router from './routes/index.ts';
+import { errorHandler } from './middlewares/errorHandler.middleware.ts';
 
-
-// 📁 .env Load with explicit terminal output (Ultra Smart Shop pattern)
 const envPaths = [
   path.join(process.cwd(), '.env'),
   path.join(process.cwd(), 'backend', '.env'),

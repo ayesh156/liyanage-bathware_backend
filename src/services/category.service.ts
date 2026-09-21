@@ -1,12 +1,12 @@
-import prisma from '../lib/prisma.js';
-import { AppError } from '../utils/appError.js';
-import { generateSequentialId } from '../utils/idGenerator.js';
-import {
+import prisma from '../lib/prisma.ts';
+import { AppError } from '../utils/appError.ts';
+import { generateSequentialId } from '../utils/idGenerator.ts';
+import type {
   CategoryDTO,
   CreateCategoryInput,
   UpdateCategoryInput,
   BulkCategoryDisplayInput,
-} from '../types/index.js';
+} from '../types/index.ts';
 
 function toDTO(record: any): CategoryDTO {
   return {

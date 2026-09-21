@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
-import { InvoiceService } from '../services/invoice.service.js';
-import { catchAsync } from '../utils/catchAsync.js';
-import { AuthRequest } from '../middlewares/auth.middleware.js';
+import { InvoiceService } from '../services/invoice.service.ts';
+import { catchAsync } from '../utils/catchAsync.ts';
+import { AuthRequest } from '../middlewares/auth.middleware.ts';
 
 /**
  * Invoice Controller
