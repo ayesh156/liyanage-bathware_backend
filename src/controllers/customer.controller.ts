@@ -1,7 +1,7 @@
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { CustomerService } from '../services/customer.service.ts';
 import { catchAsync } from '../utils/catchAsync.ts';
-import { AuthRequest } from '../middlewares/auth.middleware.ts';
+import type { AuthRequest } from '../middlewares/auth.middleware.ts';
 
 export const CustomerController = {
   /**

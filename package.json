@@ -3,13 +3,13 @@
   "version": "1.0.0",
   "description": "REST API for Liyanage Bathware POS System",
   "type": "module",
-  "main": "dist/main.js",
+  "main": "src/main.ts",
   "scripts": {
-    "dev": "tsx watch src/main.ts",
+    "dev": "node src/main.ts",
     "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit && tsup src/main.ts --outDir dist --format esm --clean --sourcemap",
-    "start": "node dist/main.js",
-    "start:prod": "node dist/main.js",
+    "build": "tsc --noEmit",
+    "start": "node src/main.ts",
+    "start:prod": "node src/main.ts",
     "seed": "npx prisma db seed",
     "seed2": "ts-node --project prisma/tsconfig.seed.json --esm prisma/seed2.ts",
     "postinstall": "npx prisma generate",
@@ -47,7 +47,6 @@
     "@types/node": "^25.9.1",
     "prisma": "^6.19.3",
     "ts-node": "^10.9.2",
-    "tsup": "^8.4.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   }

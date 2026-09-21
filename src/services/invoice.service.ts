@@ -4,7 +4,7 @@ import path from 'node:path';
 import prisma from '../lib/prisma.ts';
 import { AppError } from '../utils/appError.ts';
 import { colomboNow } from '../utils/dateUtils.ts';
-import { InvoiceDTO, InvoiceItemDTO, PaginatedResult } from '../types/index.ts';
+import { type InvoiceDTO, type InvoiceItemDTO, type PaginatedResult } from '../types/index.ts';
 
 // ── Deterministic Time-Sortable InvoiceItem IDs (ZERO-MIGRATION ORDER FIX) ──
 // The InvoiceItem schema stores its primary key as a random UUID v4 string.

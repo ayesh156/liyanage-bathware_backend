@@ -1,8 +1,8 @@
-import type  { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { ProductService } from '../services/product.service.ts';
 import { CategoryService } from '../services/category.service.ts';
 import { catchAsync } from '../utils/catchAsync.ts';
-import type  { AuthRequest } from '../middlewares/auth.middleware.ts';
+import type { AuthRequest } from '../middlewares/auth.middleware.ts';
 
 /**
  * Product Controller

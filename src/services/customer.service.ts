@@ -2,7 +2,7 @@ import prisma from '../lib/prisma.ts';
 import { AppError } from '../utils/appError.ts';
 import { colomboNow } from '../utils/dateUtils.ts';
 import { generateSequentialId } from '../utils/idGenerator.ts';
-import { CustomerDTO, PaginatedResult } from '../types/index.ts';
+import { type CustomerDTO, type PaginatedResult } from '../types/index.ts';
 
 function toDTO(record: any): CustomerDTO {
   return {

@@ -1,4 +1,4 @@
-import type  { Router, Request, Response, NextFunction } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import { ProductController } from '../controllers/product.controller.ts';
 import { authMiddleware, requireAdmin } from '../middlewares/auth.middleware.ts';
 import { AppError } from '../utils/appError.ts';

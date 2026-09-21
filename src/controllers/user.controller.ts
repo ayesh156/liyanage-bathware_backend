@@ -1,8 +1,8 @@
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { UserService } from '../services/user.service.ts';
 import prisma from '../lib/prisma.ts';
 import { catchAsync } from '../utils/catchAsync.ts';
-import { AuthRequest } from '../middlewares/auth.middleware.ts';
+import type { AuthRequest } from '../middlewares/auth.middleware.ts';
 
 export const UserController = {
   /**
