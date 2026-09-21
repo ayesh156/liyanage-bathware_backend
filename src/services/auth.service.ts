@@ -80,6 +80,11 @@ export class AuthService {
    * Throws if the token is invalid or expired.
    */
   static verifyToken(token: string): { userId: number; role: string } {
+  try {
     return jwt.verify(token, JWT_SECRET) as { userId: number; role: string };
+  } catch (error) {
+    console.error('JWT VERIFY ERROR:', error);
+    throw error;
   }
+}
 }
