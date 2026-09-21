@@ -5,7 +5,8 @@ import path from 'path';
 import fs from 'fs';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import { prisma, connectDB } from './lib/prisma.ts';
+// [FIX 2026-09-21] Use the shared Prisma lifecycle helpers for startup and shutdown.
+import { prisma, connectDB, disconnectDB } from './lib/prisma.ts';
 import router from './routes/index.ts';
 import { errorHandler } from './middlewares/errorHandler.middleware.ts';
 
@@ -200,7 +201,7 @@ function handleGracefulShutdown(signal: string) {
 
   httpServer.close(async () => {
     try {
-      await prisma.$disconnect();
+      await disconnectDB();
       console.log('[lsnode] Database disconnected. Exiting cleanly.');
       process.exit(0);
     } catch (err) {
