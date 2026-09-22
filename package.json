@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node src/main.ts",
     "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit",
+    "build": "tsup src/main.ts --format esm --platform node --target node24 --out-dir dist --sourcemap",
     "start": "node src/main.ts",
     "start:prod": "node src/main.ts",
     "seed": "npx prisma db seed",
@@ -34,6 +34,7 @@
     "mariadb": "^3.5.3",
     "multer": "^2.1.1",
     "nodemon": "^3.1.14",
+    "tsup": "^8.5.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
